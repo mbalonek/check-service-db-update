@@ -7,14 +7,12 @@ import de.balonek.model.CheckResult
 import de.balonek.model.DeliveryNote
 import de.balonek.model.ModuleReleaseCheckResult
 import org.apache.http.client.utils.URIBuilder
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
-import org.springframework.http.HttpStatus
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -25,9 +23,9 @@ import java.util.logging.Logger
 @Service
 @Configuration
 class ReleaseLoader (
-            var releases : MutableMap<String, Boolean>,
-
-            @Autowired var env: Environment
+    var releases : MutableMap<String, Boolean>,
+    var env: Environment,
+    var kafkaTemplate : KafkaTemplate<String, String>
         ) {
     val log = Logger.getLogger("ReleaseLoader")
 
@@ -109,22 +107,24 @@ class ReleaseLoader (
         return checkResult
     }
 
-    suspend fun sendResults(checkResult: CheckResult): HttpStatus {
+    suspend fun sendResults(checkResult: CheckResult) {
         val mapper = jacksonObjectMapper()
-
-        val jsonResults = mapper.writeValueAsString(checkResult)
-
+        val resultJSON = mapper.writeValueAsString(checkResult)
+        kafkaTemplate.send("check-results",resultJSON)
+        log.info("Check-results send : "+resultJSON)
+/*
         val client: HttpClient = HttpClient.newBuilder().build()
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(env.getProperty("facade.base.url")))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(jsonResults))
-            .build()
 
-        log.info("Sending results...")
-        val response = client.send(request,HttpResponse.BodyHandlers.ofString()) //TODO ASYNC
-        log.info("Send. ${HttpStatus.valueOf(response.statusCode()).reasonPhrase}")
+           .uri(URI.create(env.getProperty("facade.base.url")))
+           .header("Content-Type", "application/json")
+           .POST(HttpRequest.BodyPublishers.ofString(jsonResults))
+           .build()
 
-        return HttpStatus.valueOf(response.statusCode())
-    }
+       val response = client.send(request,HttpResponse.BodyHandlers.ofString()) //TODO ASYNC
+       log.info("Send. ${HttpStatus.valueOf(response.statusCode()).reasonPhrase}")
+       */
+
+       // return HttpStatus.valueOf(response.statusCode())
+   }
 }
